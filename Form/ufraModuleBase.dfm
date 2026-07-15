@@ -1,0 +1,39 @@
+object fraModuleBase: TfraModuleBase
+  Left = 0
+  Top = 0
+  Width = 697
+  Height = 443
+  TabOrder = 0
+  object ClientPanel: TscPanel
+    Left = 0
+    Top = 0
+    Width = 697
+    Height = 443
+    Align = alClient
+    FluentUIOpaque = False
+    TabOrder = 0
+    CustomImageIndex = -1
+    DragForm = False
+    DragTopForm = True
+    StyleKind = scpsPanel
+    ShowCaption = False
+    BorderStyle = scpbsNone
+    WallpaperIndex = -1
+    LightBorderColor = clBtnHighlight
+    ShadowBorderColor = clBtnShadow
+    CaptionGlowEffect.Enabled = False
+    CaptionGlowEffect.Color = clBtnShadow
+    CaptionGlowEffect.AlphaValue = 255
+    CaptionGlowEffect.GlowSize = 7
+    CaptionGlowEffect.Offset = 0
+    CaptionGlowEffect.Intensive = True
+    CaptionGlowEffect.StyleColors = True
+    Color = clWhite
+    Caption = 'ClientPanel'
+    StorePaintBuffer = True
+  end
+  object actList: TActionList
+    Left = 84
+    Top = 88
+  end
+end

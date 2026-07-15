@@ -1,0 +1,47 @@
+# Delphi / RAD Studio build outputs
+Win32/
+Win64/
+__history/
+*.dcu
+*.exe
+*.dll
+*.bpl
+*.dcp
+*.map
+*.rsm
+*.local
+*.identcache
+*.stat
+*.dsk
+*.~*
+*.bak
+*.ddp
+
+# Project local / IDE
+*.dproj.local
+*.groupproj.local
+*.skincfg
+HSMES.identcache
+MES.identcache
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vs/
+.idea/
+*.swp
+*.swo
+
+# Logs / temp
+*.log
+*.tmp
+/Bin/*.exe
+/Bin/*.map
+
+# Local runtime config / data (do not push secrets)
+Bin/MES.ini
+Bin/data/
+*.db
+
+# Duplicate / temp icon copies with non-ASCII names
+Assets/Logo/*副本*

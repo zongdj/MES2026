@@ -1,0 +1,23 @@
+---
+description: Delphi 源文件编码约定（强制）
+globs: **/*.{pas,dpr,dpk,dfm,inc}
+alwaysApply: true
+---
+
+# Delphi 编码约定（必须遵守）
+
+## .pas / .dpr / .dpk / .inc
+
+- 中文、越南文等字符串必须**直接写成可读文字**，例如：`Translate('请上班')`、`raise Exception.Create('请先完成落轴任务再上纱')`。
+- **禁止**把 `.pas` 里的中文改成 `#35831#19978#29677` 这种码点写法。
+- **禁止**用脚本/工具批量把 `.pas` 中文转成 `#xxxxx`。
+- 文件保存为 **UTF-8 with BOM**（Delphi 10.2 友好）。
+
+## .dfm
+
+- `.dfm` 才允许/需要按 Delphi 惯例使用 `#xxxxx` 码点或 GB2312 相关处理。
+- 不要把 `.dfm` 的规则套用到 `.pas`。
+
+## 修复乱码时
+
+- 若看到 `??????`、`锟斤拷`、错误的 `#码点`：应恢复为**正常中文原文**，不要继续用码点“顶替”。
