@@ -106,7 +106,7 @@ begin
   AManager.AddTranslation('加载翻译数据失败:', '加载翻译数据失败:', 'Failed to load translations:', 'Tải dữ liệu dịch thất bại:');
   AManager.AddTranslation('包房', '包房', 'Private room', 'Phòng VIP');
   AManager.AddTranslation('单价', '单价', 'Unit price', 'Đơn giá');
-  AManager.AddTranslation('原纱个数', '原纱个数', 'Raw yarn count', 'Số lượng sợi gốc');
+  AManager.AddTranslation('原纱个数', '原纱个数', 'Raw yarn count', 'SL sợi gốc');
   AManager.AddTranslation('去皮', '去皮', 'Tare', 'Trừ bì');
   AManager.AddTranslation('取消', '取消', 'Cancel', 'Hủy');
   AManager.AddTranslation('取消(&C)', '取消(&C)', '&Cancel', '&Hủy');
@@ -163,7 +163,7 @@ begin
   AManager.AddTranslation('开始初始化数据...', '开始初始化数据...', 'Initializing data...', 'Bắt đầu khởi tạo dữ liệu...');
   AManager.AddTranslation('开始加载客户端列表...', '开始加载客户端列表...', 'Loading client list...', 'Bắt đầu tải danh sách client...');
   AManager.AddTranslation('开始加载系统风格信息...', '开始加载系统风格信息...', 'Loading skin info...', 'Đang tải thông tin giao diện...');
-  AManager.AddTranslation('开始时间', '开始时间', 'Start time', 'Thời gian bắt đầu');
+  AManager.AddTranslation('开始时间', '开始时间', 'Start time', 'TG bắt đầu');
   AManager.AddTranslation('开始读数', '开始读数', 'Start reading', 'Bắt đầu đọc');
   AManager.AddTranslation('开始长度', '开始长度', 'Start length', 'Dài BĐ');
   AManager.AddTranslation('开始长度不能小于等于结束长度或结束长度不能等于0', '开始长度不能小于等于结束长度或结束长度不能等于0', '开始长度不能小于等于结束长度或结束长度不能等于0', ', , ');
@@ -207,7 +207,7 @@ begin
   AManager.AddTranslation('整经产量', '整经产量', 'Warping output', 'Sản lượng mắc sợi');
   AManager.AddTranslation('整经报工', '整经报工', 'Warping reporting', 'Báo công mắc sợi');
   AManager.AddTranslation('断头率', '断头率', 'Breakage rate', 'Tỷ lệ đứt đầu');
-  AManager.AddTranslation('新倒筒数', '新倒筒数', 'New rewinding count', 'Số ống đảo mới');
+  AManager.AddTranslation('新倒筒数', '新倒筒数', 'New rewinding count', 'Ống đảo mới');
   AManager.AddTranslation('新增到数据库', '新增到数据库', 'Add to database', 'Thêm vào CSDL');
   AManager.AddTranslation('无', '无', 'None', 'Không');
   AManager.AddTranslation('无法连接数据库服务器', '无法连接数据库服务器', 'Cannot connect to database server', 'Không kết nối được máy chủ CSDL');
@@ -304,7 +304,7 @@ begin
   AManager.AddTranslation('端头数', '端头数', 'Number of ends', 'Số đầu mút');
   AManager.AddTranslation('第一批', '第一批', 'First lot', 'Lô đầu tiên');
   AManager.AddTranslation('筒号', '筒号', 'Package No.', 'Số ống');
-  AManager.AddTranslation('筒脚个数', '筒脚个数', 'Package remnant count', 'Số ống dư');
+  AManager.AddTranslation('筒脚个数', '筒脚个数', 'Package remnant count', 'Ống dư');
   AManager.AddTranslation('简体', '简体', 'Simplified Chinese', 'Tiếng Trung giản thể');
   AManager.AddTranslation('简体中文', '简体中文', 'Simplified Chinese', 'Tiếng Trung giản thể');
   AManager.AddTranslation('系统启动中......', '系统启动中......', 'Starting system...', 'Hệ thống đang khởi động...');
@@ -314,7 +314,7 @@ begin
   AManager.AddTranslation('系统错误', '系统错误', 'System error', 'Lỗi hệ thống');
   AManager.AddTranslation('系统错误提示', '系统错误提示', 'System error', 'Thông báo lỗi hệ thống');
   AManager.AddTranslation('繁體', '繁體', 'Traditional Chinese', 'Tiếng Trung phồn thể');
-  AManager.AddTranslation('纱批号', '纱批号', 'Yarn lot No.', 'Số lô sợi');
+  AManager.AddTranslation('纱批号', '纱批号', 'Yarn lot No.', 'Lô sợi');
   AManager.AddTranslation('纱支', '纱支', 'Yarn count', 'Số chỉ');
   AManager.AddTranslation('纱支信息', '纱支信息', 'Yarn count info', 'TT sợi');
   AManager.AddTranslation('纵声大笑', '纵声大笑', 'Laugh out loud', 'Cười lớn');
@@ -421,7 +421,7 @@ begin
   AManager.AddTranslation('邮箱', '邮箱', 'Email', 'Email');
   AManager.AddTranslation('采集已打开', '采集已打开', 'Collection enabled', 'Thu thập đã bật');
   AManager.AddTranslation('采集频率', '采集频率', 'Collection frequency', 'Tần suất thu thập');
-  AManager.AddTranslation('重     量', '重     量', 'Weight', 'Khối lượng');
+  AManager.AddTranslation('重     量', '重     量', 'Weight', 'KL');
   AManager.AddTranslation('重打上单', '重打上单', 'Reprint last order', 'In lại đơn trước');
   AManager.AddTranslation('重试(&R)', '重试(&R)', '&Retry', '&Thử lại');
   AManager.AddTranslation('金手勺私房菜', '金手勺私房菜', 'Private kitchen', 'Nhà hàng tư nhân');

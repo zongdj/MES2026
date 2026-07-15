@@ -33,6 +33,7 @@ type
     FIsConnectionOwner: Boolean;
     FVisited: TDictionary<TComponent, Boolean>;
     FBaseFontSize: TDictionary<Pointer, Integer>;
+    FBaseWidth: TDictionary<Pointer, Integer>;
 
     function NormalizeText(const Text: string): string;
     function TextsEqual(const A, B: string): Boolean;
@@ -50,7 +51,10 @@ type
     function GetAvailableTextWidth(Component: TComponent): Integer;
     procedure CacheBaseFontSize(Component: TComponent; FontObj: TFont);
     procedure RestoreBaseFontSize(Component: TComponent; FontObj: TFont);
+    procedure CacheBaseWidth(Component: TComponent);
+    procedure RestoreBaseWidth(Component: TComponent);
     procedure TryEnableWordWrap(Component: TComponent);
+    procedure TryExpandControlWidth(Component: TComponent; NeedW: Integer);
     procedure FitControlText(Component: TComponent);
   public
     constructor Create(AUseExistingConnection: Boolean = False;
@@ -173,6 +177,7 @@ begin
   FLanguageDict := TDictionary<string, TLanguageItem>.Create;
   FVisited := TDictionary<TComponent, Boolean>.Create;
   FBaseFontSize := TDictionary<Pointer, Integer>.Create;
+  FBaseWidth := TDictionary<Pointer, Integer>.Create;
   FCurrentLanguage := ltiChinese;
   FIsConnectionOwner := False;
 
@@ -204,6 +209,7 @@ destructor TLanguageManager.Destroy;
 begin
   FreeAndNil(FVisited);
   FreeAndNil(FBaseFontSize);
+  FreeAndNil(FBaseWidth);
   FreeAndNil(FLanguageDict);
 
   if FIsConnectionOwner then
@@ -535,6 +541,29 @@ begin
     FontObj.Size := BaseSize;
 end;
 
+procedure TLanguageManager.CacheBaseWidth(Component: TComponent);
+var
+  Key: Pointer;
+  Ctrl: TControl;
+begin
+  if not (Component is TControl) then
+    Exit;
+  Ctrl := TControl(Component);
+  Key := Pointer(Component);
+  if not FBaseWidth.ContainsKey(Key) then
+    FBaseWidth.Add(Key, Ctrl.Width);
+end;
+
+procedure TLanguageManager.RestoreBaseWidth(Component: TComponent);
+var
+  BaseW: Integer;
+begin
+  if not (Component is TControl) then
+    Exit;
+  if FBaseWidth.TryGetValue(Pointer(Component), BaseW) then
+    TControl(Component).Width := BaseW;
+end;
+
 procedure TLanguageManager.TryEnableWordWrap(Component: TComponent);
 var
   RttiContext: TRttiContext;
@@ -565,11 +594,47 @@ begin
   end;
 end;
 
+procedure TLanguageManager.TryExpandControlWidth(Component: TComponent; NeedW: Integer);
+var
+  Ctrl: TControl;
+  ParentCtrl: TWinControl;
+  MaxW, NewW: Integer;
+  Cn: string;
+begin
+  if not (Component is TControl) then
+    Exit;
+  Ctrl := TControl(Component);
+  Cn := UpperCase(Component.ClassName);
+  // 只放宽标签，避免把编辑框/按钮撑乱
+  if (Pos('LABEL', Cn) = 0) and (Pos('STATIC', Cn) = 0) and
+     (Pos('CAPTION', Cn) = 0) then
+    Exit;
+
+  CacheBaseWidth(Component);
+
+  NewW := NeedW + 6;
+  if NewW <= Ctrl.Width then
+    Exit;
+
+  MaxW := NewW;
+  if Ctrl.Parent is TWinControl then
+  begin
+    ParentCtrl := TWinControl(Ctrl.Parent);
+    MaxW := ParentCtrl.ClientWidth - Ctrl.Left - 2;
+    if MaxW < Ctrl.Width then
+      MaxW := Ctrl.Width;
+  end;
+  if NewW > MaxW then
+    NewW := MaxW;
+  if NewW > Ctrl.Width then
+    Ctrl.Width := NewW;
+end;
+
 procedure TLanguageManager.FitControlText(Component: TComponent);
 var
   FontObj: TFont;
   Text: string;
-  AvailW, TextW, Size: Integer;
+  AvailW, TextW: Integer;
   Bmp: TBitmap;
   Cn: string;
 begin
@@ -581,8 +646,17 @@ begin
     Exit;
 
   FontObj := GetComponentFont(Component);
+  // 切回中文/短文案时先恢复设计宽度与字号
+  if Assigned(FontObj) then
+  begin
+    CacheBaseFontSize(Component, FontObj);
+    RestoreBaseFontSize(Component, FontObj);
+  end;
+  CacheBaseWidth(Component);
+  RestoreBaseWidth(Component);
+
   AvailW := GetAvailableTextWidth(Component);
-  // Grid 列：通常无自有 Font，缩写由词典负责；有 Width 时仍尝试 WordWrap 相关属性
+
   if FontObj = nil then
   begin
     Cn := UpperCase(Component.ClassName);
@@ -591,25 +665,20 @@ begin
     Exit;
   end;
 
-  CacheBaseFontSize(Component, FontObj);
-  RestoreBaseFontSize(Component, FontObj);
-
-  if AvailW < 8 then
-    Exit;
-
   Bmp := TBitmap.Create;
   try
     Bmp.SetSize(1, 1);
     Bmp.Canvas.Font.Assign(FontObj);
     TextW := Bmp.Canvas.TextWidth(Text);
-    Size := FontObj.Size;
-    while (TextW > AvailW) and (Size > 8) do
+    if AvailW < 8 then
+      AvailW := TextW;
+
+    if TextW > AvailW then
     begin
-      Dec(Size);
-      FontObj.Size := Size;
-      Bmp.Canvas.Font.Assign(FontObj);
-      TextW := Bmp.Canvas.TextWidth(Text);
+      TryExpandControlWidth(Component, TextW);
+      AvailW := GetAvailableTextWidth(Component);
     end;
+
     if TextW > AvailW then
       TryEnableWordWrap(Component);
   finally
