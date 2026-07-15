@@ -41,6 +41,7 @@ type
     function GetLanguageField(const Item: TLanguageItem; const ALanguage: TiLanguageType): string;
     function IsControlName(const Text: string; const Component: TComponent): Boolean;
     function ShouldSkipComponent(Component: TComponent): Boolean;
+    function IsDataBoundValueControl(Component: TComponent): Boolean;
     function ShouldTranslateTextProperty(Component: TComponent): Boolean;
     procedure TranslateComponent(Component: TComponent; const ALanguage: TiLanguageType);
     procedure TranslateProperty(Component: TComponent; const PropName: string;
@@ -396,6 +397,87 @@ begin
   end;
 end;
 
+function TLanguageManager.IsDataBoundValueControl(Component: TComponent): Boolean;
+var
+  Cn: string;
+  RttiContext: TRttiContext;
+  RttiType: TRttiType;
+  RttiProperty: TRttiProperty;
+  DataField: string;
+  Binding: TValue;
+  BindingObj: TObject;
+  BindCtx: TRttiContext;
+  FieldNameProp: TRttiProperty;
+  FieldName: string;
+begin
+  { DBLabel/DBText 等：写入 Caption/Text 会写进数据集字段，需 dsEdit/dsInsert，
+    否则报 Dataset not in edit or insert mode }
+  Result := False;
+  if Component = nil then
+    Exit;
+
+  Cn := UpperCase(Component.ClassName);
+  if (Pos('DBLABEL', Cn) > 0) or (Pos('DBTEXT', Cn) > 0) or
+     (Pos('DBEDIT', Cn) > 0) or (Pos('DBMEMO', Cn) > 0) or
+     (Pos('DBSPIN', Cn) > 0) or (Pos('DBCALC', Cn) > 0) then
+    Exit(True);
+
+  // 非按钮/勾选/列的 DB 文本展示控件
+  if (Pos('DB', Cn) > 0) and (Pos('BUTTON', Cn) = 0) and (Pos('CHECK', Cn) = 0) and
+     (Pos('RADIO', Cn) = 0) and (Pos('COLUMN', Cn) = 0) and (Pos('GRID', Cn) = 0) and
+     (Pos('COMBO', Cn) = 0) and
+     ((Pos('LABEL', Cn) > 0) or ((Pos('TEXT', Cn) > 0) and (Pos('EDIT', Cn) = 0))) then
+    Exit(True);
+
+  RttiContext := TRttiContext.Create;
+  try
+    RttiType := RttiContext.GetType(Component.ClassType);
+    RttiProperty := RttiType.GetProperty('DataField');
+    if Assigned(RttiProperty) and RttiProperty.IsReadable then
+    begin
+      try
+        DataField := Trim(RttiProperty.GetValue(Component).AsString);
+        if (DataField <> '') and (Pos('CHECK', Cn) = 0) and (Pos('RADIO', Cn) = 0) and
+           (Pos('BUTTON', Cn) = 0) and (Pos('COLUMN', Cn) = 0) then
+          Exit(True);
+      except
+      end;
+    end;
+
+    RttiProperty := RttiType.GetProperty('DataBinding');
+    if Assigned(RttiProperty) and RttiProperty.IsReadable then
+    begin
+      try
+        Binding := RttiProperty.GetValue(Component);
+        if (not Binding.IsEmpty) and Binding.IsObject then
+        begin
+          BindingObj := Binding.AsObject;
+          if Assigned(BindingObj) then
+          begin
+            BindCtx := TRttiContext.Create;
+            try
+              FieldNameProp := BindCtx.GetType(BindingObj.ClassType).GetProperty('FieldName');
+              if Assigned(FieldNameProp) and FieldNameProp.IsReadable then
+              begin
+                FieldName := Trim(FieldNameProp.GetValue(BindingObj).AsString);
+                if (FieldName <> '') and (Pos('CHECK', Cn) = 0) and (Pos('RADIO', Cn) = 0) and
+                   (Pos('BUTTON', Cn) = 0) and (Pos('EDIT', Cn) = 0) and
+                   (Pos('COLUMN', Cn) = 0) then
+                  Exit(True);
+              end;
+            finally
+              BindCtx.Free;
+            end;
+          end;
+        end;
+      except
+      end;
+    end;
+  finally
+    RttiContext.Free;
+  end;
+end;
+
 function TLanguageManager.ShouldTranslateTextProperty(Component: TComponent): Boolean;
 var
   Cn: string;
@@ -405,11 +487,13 @@ begin
     Exit;
   if Component is TCustomEdit then
     Exit(False);
+  if IsDataBoundValueControl(Component) then
+    Exit(False);
 
   Cn := UpperCase(Component.ClassName);
   if (Pos('EDIT', Cn) > 0) or (Pos('MEMO', Cn) > 0) or (Pos('COMBO', Cn) > 0) or
      (Pos('SPIN', Cn) > 0) or (Pos('MASK', Cn) > 0) or (Pos('LOOKUP', Cn) > 0) or
-     (Pos('DATE', Cn) > 0) or (Pos('TIME', Cn) > 0) then
+     (Pos('DATE', Cn) > 0) or (Pos('TIME', Cn) > 0) or (Pos('DB', Cn) > 0) then
     Exit(False);
 
   Result := True;
@@ -574,7 +658,9 @@ begin
   if Component = nil then
     Exit;
   Cn := UpperCase(Component.ClassName);
-  // 仅标签类尝试换行，避免破坏按钮单行布局
+  // 仅标签类尝试换行；按钮换行会出现“lê / n sợi”断词，故排除
+  if (Pos('BUTTON', Cn) > 0) or (Pos('BTN', Cn) > 0) then
+    Exit;
   if (Pos('LABEL', Cn) = 0) and (Pos('STATIC', Cn) = 0) then
     Exit;
 
@@ -605,9 +691,10 @@ begin
     Exit;
   Ctrl := TControl(Component);
   Cn := UpperCase(Component.ClassName);
-  // 只放宽标签，避免把编辑框/按钮撑乱
+  // 放宽标签与按钮宽度（按钮宁可加宽，也不换行断词）
   if (Pos('LABEL', Cn) = 0) and (Pos('STATIC', Cn) = 0) and
-     (Pos('CAPTION', Cn) = 0) then
+     (Pos('CAPTION', Cn) = 0) and (Pos('BUTTON', Cn) = 0) and
+     (Pos('BTN', Cn) = 0) then
     Exit;
 
   CacheBaseWidth(Component);
@@ -639,6 +726,8 @@ var
   Cn: string;
 begin
   if Component = nil then
+    Exit;
+  if IsDataBoundValueControl(Component) then
     Exit;
 
   Text := Trim(GetComponentCaptionText(Component));
@@ -754,9 +843,13 @@ begin
     Exit;
   FVisited.Add(Component, True);
 
-  TranslateProperty(Component, 'Caption', ALanguage);
-  if ShouldTranslateTextProperty(Component) then
-    TranslateProperty(Component, 'Text', ALanguage);
+  // 数据绑定值控件：绝不能改 Caption/Text，否则未 Edit 时会抛 EDatabaseError
+  if not IsDataBoundValueControl(Component) then
+  begin
+    TranslateProperty(Component, 'Caption', ALanguage);
+    if ShouldTranslateTextProperty(Component) then
+      TranslateProperty(Component, 'Text', ALanguage);
+  end;
   TranslateProperty(Component, 'Hint', ALanguage);
   // 开关控件文案
   TranslateProperty(Component, 'CaptionOn', ALanguage);

@@ -57,13 +57,13 @@ begin
   AManager.AddTranslation('任务已完结', '任务已完结', 'Task completed', 'Nhiệm vụ đã hoàn tất');
   AManager.AddTranslation('保存', '保存', 'Save', 'Lưu');
   AManager.AddTranslation('保存上纱信息完成', '保存上纱信息完成', 'Yarn loading info saved', 'Đã lưu thông tin lên sợi');
-  AManager.AddTranslation('保存上纱记录', '保存上纱记录', 'Save yarn loading record', 'Lưu bản ghi lên sợi');
+  AManager.AddTranslation('保存上纱记录', '保存上纱记录', 'Save yarn loading record', 'Lưu TT lên sợi');
   AManager.AddTranslation('保存产量', '保存产量', 'Save output', 'Lưu sản lượng');
   AManager.AddTranslation('保存产量数据完成', '保存产量数据完成', 'Output data saved', 'Đã lưu dữ liệu sản lượng');
   AManager.AddTranslation('保存到当前', '保存到当前', 'Save to current', 'Lưu vào hiện tại');
   AManager.AddTranslation('保存开机轴任务', '保存开机轴任务', 'Save beam start task', 'Lưu nhiệm vụ trục khởi động');
   AManager.AddTranslation('信息', '信息', 'Information', 'Thông tin');
-  AManager.AddTranslation('修改上纱信息', '修改上纱信息', 'Edit yarn loading info', 'Sửa thông tin lên sợi');
+  AManager.AddTranslation('修改上纱信息', '修改上纱信息', 'Edit yarn loading info', 'Sửa TT lên sợi');
   AManager.AddTranslation('值录入', '值录入', 'Enter value', 'Nhập giá trị');
   AManager.AddTranslation('停止读数', '停止读数', 'Stop reading', 'Dừng đọc');
   AManager.AddTranslation('全否(&A)', '全否(&A)', 'N&o to All', 'Không tất cả(&A)');
@@ -163,7 +163,7 @@ begin
   AManager.AddTranslation('开始初始化数据...', '开始初始化数据...', 'Initializing data...', 'Bắt đầu khởi tạo dữ liệu...');
   AManager.AddTranslation('开始加载客户端列表...', '开始加载客户端列表...', 'Loading client list...', 'Bắt đầu tải danh sách client...');
   AManager.AddTranslation('开始加载系统风格信息...', '开始加载系统风格信息...', 'Loading skin info...', 'Đang tải thông tin giao diện...');
-  AManager.AddTranslation('开始时间', '开始时间', 'Start time', 'TG bắt đầu');
+  AManager.AddTranslation('开始时间', '开始时间', 'Start time', 'TG BĐ');
   AManager.AddTranslation('开始读数', '开始读数', 'Start reading', 'Bắt đầu đọc');
   AManager.AddTranslation('开始长度', '开始长度', 'Start length', 'Dài BĐ');
   AManager.AddTranslation('开始长度不能小于等于结束长度或结束长度不能等于0', '开始长度不能小于等于结束长度或结束长度不能等于0', '开始长度不能小于等于结束长度或结束长度不能等于0', ', , ');
@@ -192,7 +192,7 @@ begin
   AManager.AddTranslation('报表', '报表', 'Reports', 'Báo cáo');
   AManager.AddTranslation('挂单 F8', '挂单 F8', 'Hold order F8', 'Giữ đơn F8');
   AManager.AddTranslation('提示', '提示', 'Tip', 'Gợi ý');
-  AManager.AddTranslation('操作', '操作', 'Action', 'Thao tác');
+  AManager.AddTranslation('操作', '操作', 'Action', 'Xử lý');
   AManager.AddTranslation('收入分析图', '收入分析图', 'Revenue chart', 'Biểu đồ doanh thu');
   AManager.AddTranslation('收款单', '收款单', 'Receipt', 'Phiếu thu');
   AManager.AddTranslation('收购总额（斤）', '收购总额（斤）', 'Purchase total (jin)', 'Tổng thu mua (cân)');
@@ -282,7 +282,7 @@ begin
   AManager.AddTranslation('用户已经锁定', '用户已经锁定', '用户已经锁定', ', , ');
   AManager.AddTranslation('用户登录   V', '用户登录   V', 'User login   V', 'Đăng nhập   V');
   AManager.AddTranslation('用户登录   V1.0', '用户登录   V1.0', 'User login   V1.0', 'Đăng nhập   V1.0');
-  AManager.AddTranslation('用纱完成', '用纱完成', 'Yarn usage completed', 'Hoàn thành dùng sợi');
+  AManager.AddTranslation('用纱完成', '用纱完成', 'Yarn usage completed', 'Xong dùng sợi');
   AManager.AddTranslation('用纱完成标识结束', '用纱完成标识结束', '用纱完成标识结束', ', , ');
   AManager.AddTranslation('电子码表尚未连接', '电子码表尚未连接', 'Electronic meter not connected', 'Đồng hồ điện tử chưa kết nối');
   AManager.AddTranslation('电子码表未连接', '电子码表未连接', 'Electronic meter not connected', 'Đồng hồ điện tử chưa kết nối');
@@ -292,7 +292,7 @@ begin
   AManager.AddTranslation('登录', '登录', 'Login', 'Đăng nhập');
   AManager.AddTranslation('登录密码错误!', '登录密码错误!', 'Incorrect password!', 'Sai mật khẩu đăng nhập!');
   AManager.AddTranslation('登录账号不存在', '登录账号不存在', 'Account does not exist', 'Tài khoản không tồn tại');
-  AManager.AddTranslation('登记人', '登记人', 'Registered by', 'Người ĐK');
+  AManager.AddTranslation('登记人', '登记人', 'Registered by', 'NV ĐK');
   AManager.AddTranslation('皮重 F3', '皮重 F3', 'Tare F3', 'Trọng lượng bì F3');
   AManager.AddTranslation('确定', '确定', 'OK', 'Xác nhận');
   AManager.AddTranslation('确定(&O)', '确定(&O)', '&OK', '&Xác nhận');
@@ -382,7 +382,7 @@ begin
   AManager.AddTranslation('请选择班别', '请选择班别', 'Please select a shift', 'Vui lòng chọn ca');
   AManager.AddTranslation('请选择班组', '请选择班组', 'Please select a team', 'Vui lòng chọn tổ');
   AManager.AddTranslation('调单', '调单', 'Adjust order', 'Điều chỉnh đơn');
-  AManager.AddTranslation('调整', '调整', 'Adjust', 'Điều chỉnh');
+  AManager.AddTranslation('调整', '调整', 'Adjust', 'Chỉnh');
   AManager.AddTranslation('调整系统最佳分辨率...', '调整系统最佳分辨率...', 'Adjusting display resolution...', 'Điều chỉnh độ phân giải...');
   AManager.AddTranslation('财务报表', '财务报表', 'Financial report', 'Báo cáo tài chính');
   AManager.AddTranslation('财务综合查询', '财务综合查询', 'Financial query', 'Truy vấn tài chính tổng hợp');
