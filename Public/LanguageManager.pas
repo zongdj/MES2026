@@ -57,6 +57,8 @@ type
     procedure TryEnableWordWrap(Component: TComponent);
     procedure TryExpandControlWidth(Component: TComponent; NeedW: Integer);
     procedure FitControlText(Component: TComponent);
+    procedure CollectSideEffectTargets(ARoot: TComponent; ADatasets: TList<TDataSet>;
+      ATimers: TList<TTimer>);
   public
     constructor Create(AUseExistingConnection: Boolean = False;
       AConnection: TADOConnection = nil; AQuery: TADOQuery = nil);
@@ -387,6 +389,16 @@ var
   P: TComponent;
 begin
   Result := False;
+  if Component = nil then
+    Exit(True);
+  // 数据集/字段/数据源本身不参与翻译，避免触碰字段元数据或 Owner 链副作用
+  if Component is TDataSet then
+    Exit(True);
+  if Component is TField then
+    Exit(True);
+  if Component is TDataSource then
+    Exit(True);
+
   P := Component;
   while Assigned(P) do
   begin
@@ -410,23 +422,22 @@ var
   FieldNameProp: TRttiProperty;
   FieldName: string;
 begin
-  { DBLabel/DBText 等：写入 Caption/Text 会写进数据集字段，需 dsEdit/dsInsert，
-    否则报 Dataset not in edit or insert mode }
+  { 改 Caption/Text 会写数据集字段时（TscGPDBText/TcxDBTextEdit 等），
+    非 dsEdit/dsInsert 会抛 EDatabaseError。表头列允许翻译 Caption。 }
   Result := False;
   if Component = nil then
     Exit;
 
   Cn := UpperCase(Component.ClassName);
-  if (Pos('DBLABEL', Cn) > 0) or (Pos('DBTEXT', Cn) > 0) or
-     (Pos('DBEDIT', Cn) > 0) or (Pos('DBMEMO', Cn) > 0) or
-     (Pos('DBSPIN', Cn) > 0) or (Pos('DBCALC', Cn) > 0) then
-    Exit(True);
+  // 网格列头需要翻译
+  if Pos('COLUMN', Cn) > 0 then
+    Exit(False);
+  // 勾选/单选的 Caption 是选项标题，不是字段值
+  if (Pos('CHECK', Cn) > 0) or (Pos('RADIO', Cn) > 0) then
+    Exit(False);
 
-  // 非按钮/勾选/列的 DB 文本展示控件
-  if (Pos('DB', Cn) > 0) and (Pos('BUTTON', Cn) = 0) and (Pos('CHECK', Cn) = 0) and
-     (Pos('RADIO', Cn) = 0) and (Pos('COLUMN', Cn) = 0) and (Pos('GRID', Cn) = 0) and
-     (Pos('COMBO', Cn) = 0) and
-     ((Pos('LABEL', Cn) > 0) or ((Pos('TEXT', Cn) > 0) and (Pos('EDIT', Cn) = 0))) then
+  // 凡类名带 DB 的值控件一律不改 Caption/Text（含 TscGPDBText / TcxDBTextEdit / GaugeDB*）
+  if Pos('DB', Cn) > 0 then
     Exit(True);
 
   RttiContext := TRttiContext.Create;
@@ -437,8 +448,7 @@ begin
     begin
       try
         DataField := Trim(RttiProperty.GetValue(Component).AsString);
-        if (DataField <> '') and (Pos('CHECK', Cn) = 0) and (Pos('RADIO', Cn) = 0) and
-           (Pos('BUTTON', Cn) = 0) and (Pos('COLUMN', Cn) = 0) then
+        if (DataField <> '') and (Pos('BUTTON', Cn) = 0) then
           Exit(True);
       except
       end;
@@ -460,9 +470,7 @@ begin
               if Assigned(FieldNameProp) and FieldNameProp.IsReadable then
               begin
                 FieldName := Trim(FieldNameProp.GetValue(BindingObj).AsString);
-                if (FieldName <> '') and (Pos('CHECK', Cn) = 0) and (Pos('RADIO', Cn) = 0) and
-                   (Pos('BUTTON', Cn) = 0) and (Pos('EDIT', Cn) = 0) and
-                   (Pos('COLUMN', Cn) = 0) then
+                if (FieldName <> '') and (Pos('BUTTON', Cn) = 0) and (Pos('EDIT', Cn) = 0) then
                   Exit(True);
               end;
             finally
@@ -882,7 +890,38 @@ begin
     Result := GetLanguageField(Item, ALanguage);
 end;
 
+procedure TLanguageManager.CollectSideEffectTargets(ARoot: TComponent;
+  ADatasets: TList<TDataSet>; ATimers: TList<TTimer>);
+var
+  i: Integer;
+  Child: TComponent;
+begin
+  if (ARoot = nil) or (ADatasets = nil) or (ATimers = nil) then
+    Exit;
+  if ARoot is TDataSet then
+  begin
+    if ADatasets.IndexOf(TDataSet(ARoot)) < 0 then
+      ADatasets.Add(TDataSet(ARoot));
+  end;
+  if ARoot is TTimer then
+  begin
+    if ATimers.IndexOf(TTimer(ARoot)) < 0 then
+      ATimers.Add(TTimer(ARoot));
+  end;
+  for i := 0 to ARoot.ComponentCount - 1 do
+  begin
+    Child := ARoot.Components[i];
+    CollectSideEffectTargets(Child, ADatasets, ATimers);
+  end;
+end;
+
 procedure TLanguageManager.TranslateForm(AControl: TWinControl; const ALanguage: TiLanguageType);
+var
+  Datasets: TList<TDataSet>;
+  Timers: TList<TTimer>;
+  TimerStates: TList<Boolean>;
+  i: Integer;
+  Ds: TDataSet;
 begin
   if AControl = nil then
     Exit;
@@ -890,9 +929,42 @@ begin
   FCurrentLanguage := ALanguage;
   // 不再改系统 Charset：会导致中文/登录页乱码；控件级字体由 FitControlText 处理
   FVisited.Clear;
+
+  Datasets := TList<TDataSet>.Create;
+  Timers := TList<TTimer>.Create;
+  TimerStates := TList<Boolean>.Create;
   try
-    TranslateComponent(AControl, ALanguage);
+    CollectSideEffectTargets(AControl, Datasets, Timers);
+    // 翻译期间关掉 Timer，避免 tmr 改 rfOutPut 与翻译交错
+    for i := 0 to Timers.Count - 1 do
+    begin
+      TimerStates.Add(Timers[i].Enabled);
+      Timers[i].Enabled := False;
+    end;
+    // 禁用数据集控件刷新，降低写字段风险
+    for i := 0 to Datasets.Count - 1 do
+    begin
+      Ds := Datasets[i];
+      if Assigned(Ds) and Ds.Active then
+        Ds.DisableControls;
+    end;
+
+    try
+      TranslateComponent(AControl, ALanguage);
+    finally
+      for i := 0 to Datasets.Count - 1 do
+      begin
+        Ds := Datasets[i];
+        if Assigned(Ds) and Ds.Active and Ds.ControlsDisabled then
+          Ds.EnableControls;
+      end;
+      for i := 0 to Timers.Count - 1 do
+        Timers[i].Enabled := TimerStates[i];
+    end;
   finally
+    TimerStates.Free;
+    Timers.Free;
+    Datasets.Free;
     FVisited.Clear;
   end;
 end;
