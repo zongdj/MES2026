@@ -39,11 +39,14 @@ type
     function GetLanguageField(const Item: TLanguageItem; const ALanguage: TiLanguageType): string;
     function IsControlName(const Text: string; const Component: TComponent): Boolean;
     function ShouldSkipComponent(Component: TComponent): Boolean;
+    function IsDataBoundValueControl(Component: TComponent): Boolean;
     function ShouldTranslateTextProperty(Component: TComponent): Boolean;
     procedure TranslateComponent(Component: TComponent; const ALanguage: TiLanguageType);
     procedure TranslateProperty(Component: TComponent; const PropName: string;
       const ALanguage: TiLanguageType);
     procedure EnsureUnicodeFont(Component: TComponent);
+    procedure CollectSideEffectTargets(ARoot: TComponent; ADatasets: TList<TDataSet>;
+      ATimers: TList<TTimer>);
   public
     constructor Create(AUseExistingConnection: Boolean = False;
       AConnection: TADOConnection = nil; AQuery: TADOQuery = nil);
@@ -370,6 +373,16 @@ var
   P: TComponent;
 begin
   Result := False;
+  if Component = nil then
+    Exit(True);
+  // 数据集/字段/数据源不参与翻译，避免触碰字段元数据
+  if Component is TDataSet then
+    Exit(True);
+  if Component is TField then
+    Exit(True);
+  if Component is TDataSource then
+    Exit(True);
+
   P := Component;
   while Assigned(P) do
   begin
@@ -377,6 +390,83 @@ begin
     if SameText(P.ClassName, 'TFrmLogin') then
       Exit(True);
     P := P.Owner;
+  end;
+end;
+
+function TLanguageManager.IsDataBoundValueControl(Component: TComponent): Boolean;
+var
+  Cn: string;
+  RttiContext: TRttiContext;
+  RttiType: TRttiType;
+  RttiProperty: TRttiProperty;
+  DataField: string;
+  Binding: TValue;
+  BindingObj: TObject;
+  BindCtx: TRttiContext;
+  FieldNameProp: TRttiProperty;
+  FieldName: string;
+begin
+  { TscGPDBText / TcxDBTextEdit 等：写 Caption/Text 会写进数据集字段，
+    非 Edit/Insert 时抛 EDatabaseError（rfOutPut: Dataset not in edit or insert mode） }
+  Result := False;
+  if Component = nil then
+    Exit;
+
+  Cn := UpperCase(Component.ClassName);
+  // 网格列头需要翻译 Caption
+  if Pos('COLUMN', Cn) > 0 then
+    Exit(False);
+  // 勾选/单选的 Caption 是选项标题，不是字段值
+  if (Pos('CHECK', Cn) > 0) or (Pos('RADIO', Cn) > 0) then
+    Exit(False);
+
+  // 凡类名带 DB 的值控件一律不改 Caption/Text
+  if Pos('DB', Cn) > 0 then
+    Exit(True);
+
+  RttiContext := TRttiContext.Create;
+  try
+    RttiType := RttiContext.GetType(Component.ClassType);
+    RttiProperty := RttiType.GetProperty('DataField');
+    if Assigned(RttiProperty) and RttiProperty.IsReadable then
+    begin
+      try
+        DataField := Trim(RttiProperty.GetValue(Component).AsString);
+        if (DataField <> '') and (Pos('BUTTON', Cn) = 0) then
+          Exit(True);
+      except
+      end;
+    end;
+
+    RttiProperty := RttiType.GetProperty('DataBinding');
+    if Assigned(RttiProperty) and RttiProperty.IsReadable then
+    begin
+      try
+        Binding := RttiProperty.GetValue(Component);
+        if (not Binding.IsEmpty) and Binding.IsObject then
+        begin
+          BindingObj := Binding.AsObject;
+          if Assigned(BindingObj) then
+          begin
+            BindCtx := TRttiContext.Create;
+            try
+              FieldNameProp := BindCtx.GetType(BindingObj.ClassType).GetProperty('FieldName');
+              if Assigned(FieldNameProp) and FieldNameProp.IsReadable then
+              begin
+                FieldName := Trim(FieldNameProp.GetValue(BindingObj).AsString);
+                if (FieldName <> '') and (Pos('BUTTON', Cn) = 0) and (Pos('EDIT', Cn) = 0) then
+                  Exit(True);
+              end;
+            finally
+              BindCtx.Free;
+            end;
+          end;
+        end;
+      except
+      end;
+    end;
+  finally
+    RttiContext.Free;
   end;
 end;
 
@@ -389,11 +479,13 @@ begin
     Exit;
   if Component is TCustomEdit then
     Exit(False);
+  if IsDataBoundValueControl(Component) then
+    Exit(False);
 
   Cn := UpperCase(Component.ClassName);
   if (Pos('EDIT', Cn) > 0) or (Pos('MEMO', Cn) > 0) or (Pos('COMBO', Cn) > 0) or
      (Pos('SPIN', Cn) > 0) or (Pos('MASK', Cn) > 0) or (Pos('LOOKUP', Cn) > 0) or
-     (Pos('DATE', Cn) > 0) or (Pos('TIME', Cn) > 0) then
+     (Pos('DATE', Cn) > 0) or (Pos('TIME', Cn) > 0) or (Pos('DB', Cn) > 0) then
     Exit(False);
 
   Result := True;
@@ -488,9 +580,13 @@ begin
     Exit;
   FVisited.Add(Component, True);
 
-  TranslateProperty(Component, 'Caption', ALanguage);
-  if ShouldTranslateTextProperty(Component) then
-    TranslateProperty(Component, 'Text', ALanguage);
+  // 数据绑定值控件：绝不能改 Caption/Text，否则未 Edit 时报 EDatabaseError
+  if not IsDataBoundValueControl(Component) then
+  begin
+    TranslateProperty(Component, 'Caption', ALanguage);
+    if ShouldTranslateTextProperty(Component) then
+      TranslateProperty(Component, 'Text', ALanguage);
+  end;
   TranslateProperty(Component, 'Hint', ALanguage);
   // 开关控件文案
   TranslateProperty(Component, 'CaptionOn', ALanguage);
@@ -523,17 +619,75 @@ begin
     Result := GetLanguageField(Item, ALanguage);
 end;
 
+procedure TLanguageManager.CollectSideEffectTargets(ARoot: TComponent;
+  ADatasets: TList<TDataSet>; ATimers: TList<TTimer>);
+var
+  i: Integer;
+  Child: TComponent;
+begin
+  if (ARoot = nil) or (ADatasets = nil) or (ATimers = nil) then
+    Exit;
+  if ARoot is TDataSet then
+  begin
+    if ADatasets.IndexOf(TDataSet(ARoot)) < 0 then
+      ADatasets.Add(TDataSet(ARoot));
+  end;
+  if ARoot is TTimer then
+  begin
+    if ATimers.IndexOf(TTimer(ARoot)) < 0 then
+      ATimers.Add(TTimer(ARoot));
+  end;
+  for i := 0 to ARoot.ComponentCount - 1 do
+    CollectSideEffectTargets(ARoot.Components[i], ADatasets, ATimers);
+end;
+
 procedure TLanguageManager.TranslateForm(AControl: TWinControl; const ALanguage: TiLanguageType);
+var
+  Datasets: TList<TDataSet>;
+  Timers: TList<TTimer>;
+  TimerStates: TList<Boolean>;
+  i: Integer;
+  Ds: TDataSet;
 begin
   if AControl = nil then
     Exit;
 
   FCurrentLanguage := ALanguage;
-  // 不再改系统 Charset：会导致中文/登录页乱码；仅对需显示越文的控件设置 YaHei 字体
   FVisited.Clear;
+
+  Datasets := TList<TDataSet>.Create;
+  Timers := TList<TTimer>.Create;
+  TimerStates := TList<Boolean>.Create;
   try
-    TranslateComponent(AControl, ALanguage);
+    CollectSideEffectTargets(AControl, Datasets, Timers);
+    // 切换语言时暂停 Timer，避免与 rfOutPut.Edit 交错
+    for i := 0 to Timers.Count - 1 do
+    begin
+      TimerStates.Add(Timers[i].Enabled);
+      Timers[i].Enabled := False;
+    end;
+    for i := 0 to Datasets.Count - 1 do
+    begin
+      Ds := Datasets[i];
+      if Assigned(Ds) and Ds.Active then
+        Ds.DisableControls;
+    end;
+    try
+      TranslateComponent(AControl, ALanguage);
+    finally
+      for i := 0 to Datasets.Count - 1 do
+      begin
+        Ds := Datasets[i];
+        if Assigned(Ds) and Ds.Active and Ds.ControlsDisabled then
+          Ds.EnableControls;
+      end;
+      for i := 0 to Timers.Count - 1 do
+        Timers[i].Enabled := TimerStates[i];
+    end;
   finally
+    TimerStates.Free;
+    Timers.Free;
+    Datasets.Free;
     FVisited.Clear;
   end;
 end;
