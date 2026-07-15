@@ -32,8 +32,6 @@ type
     FQuery: TADOQuery;
     FIsConnectionOwner: Boolean;
     FVisited: TDictionary<TComponent, Boolean>;
-    FBaseFontSize: TDictionary<Pointer, Integer>;
-    FBaseWidth: TDictionary<Pointer, Integer>;
 
     function NormalizeText(const Text: string): string;
     function TextsEqual(const A, B: string): Boolean;
@@ -41,24 +39,11 @@ type
     function GetLanguageField(const Item: TLanguageItem; const ALanguage: TiLanguageType): string;
     function IsControlName(const Text: string; const Component: TComponent): Boolean;
     function ShouldSkipComponent(Component: TComponent): Boolean;
-    function IsDataBoundValueControl(Component: TComponent): Boolean;
     function ShouldTranslateTextProperty(Component: TComponent): Boolean;
     procedure TranslateComponent(Component: TComponent; const ALanguage: TiLanguageType);
     procedure TranslateProperty(Component: TComponent; const PropName: string;
       const ALanguage: TiLanguageType);
     procedure EnsureUnicodeFont(Component: TComponent);
-    function GetComponentFont(Component: TComponent): TFont;
-    function GetComponentCaptionText(Component: TComponent): string;
-    function GetAvailableTextWidth(Component: TComponent): Integer;
-    procedure CacheBaseFontSize(Component: TComponent; FontObj: TFont);
-    procedure RestoreBaseFontSize(Component: TComponent; FontObj: TFont);
-    procedure CacheBaseWidth(Component: TComponent);
-    procedure RestoreBaseWidth(Component: TComponent);
-    procedure TryEnableWordWrap(Component: TComponent);
-    procedure TryExpandControlWidth(Component: TComponent; NeedW: Integer);
-    procedure FitControlText(Component: TComponent);
-    procedure CollectSideEffectTargets(ARoot: TComponent; ADatasets: TList<TDataSet>;
-      ATimers: TList<TTimer>);
   public
     constructor Create(AUseExistingConnection: Boolean = False;
       AConnection: TADOConnection = nil; AQuery: TADOQuery = nil);
@@ -179,8 +164,6 @@ begin
   inherited Create;
   FLanguageDict := TDictionary<string, TLanguageItem>.Create;
   FVisited := TDictionary<TComponent, Boolean>.Create;
-  FBaseFontSize := TDictionary<Pointer, Integer>.Create;
-  FBaseWidth := TDictionary<Pointer, Integer>.Create;
   FCurrentLanguage := ltiChinese;
   FIsConnectionOwner := False;
 
@@ -211,8 +194,6 @@ end;
 destructor TLanguageManager.Destroy;
 begin
   FreeAndNil(FVisited);
-  FreeAndNil(FBaseFontSize);
-  FreeAndNil(FBaseWidth);
   FreeAndNil(FLanguageDict);
 
   if FIsConnectionOwner then
@@ -389,16 +370,6 @@ var
   P: TComponent;
 begin
   Result := False;
-  if Component = nil then
-    Exit(True);
-  // 数据集/字段/数据源本身不参与翻译，避免触碰字段元数据或 Owner 链副作用
-  if Component is TDataSet then
-    Exit(True);
-  if Component is TField then
-    Exit(True);
-  if Component is TDataSource then
-    Exit(True);
-
   P := Component;
   while Assigned(P) do
   begin
@@ -406,83 +377,6 @@ begin
     if SameText(P.ClassName, 'TFrmLogin') then
       Exit(True);
     P := P.Owner;
-  end;
-end;
-
-function TLanguageManager.IsDataBoundValueControl(Component: TComponent): Boolean;
-var
-  Cn: string;
-  RttiContext: TRttiContext;
-  RttiType: TRttiType;
-  RttiProperty: TRttiProperty;
-  DataField: string;
-  Binding: TValue;
-  BindingObj: TObject;
-  BindCtx: TRttiContext;
-  FieldNameProp: TRttiProperty;
-  FieldName: string;
-begin
-  { 改 Caption/Text 会写数据集字段时（TscGPDBText/TcxDBTextEdit 等），
-    非 dsEdit/dsInsert 会抛 EDatabaseError。表头列允许翻译 Caption。 }
-  Result := False;
-  if Component = nil then
-    Exit;
-
-  Cn := UpperCase(Component.ClassName);
-  // 网格列头需要翻译
-  if Pos('COLUMN', Cn) > 0 then
-    Exit(False);
-  // 勾选/单选的 Caption 是选项标题，不是字段值
-  if (Pos('CHECK', Cn) > 0) or (Pos('RADIO', Cn) > 0) then
-    Exit(False);
-
-  // 凡类名带 DB 的值控件一律不改 Caption/Text（含 TscGPDBText / TcxDBTextEdit / GaugeDB*）
-  if Pos('DB', Cn) > 0 then
-    Exit(True);
-
-  RttiContext := TRttiContext.Create;
-  try
-    RttiType := RttiContext.GetType(Component.ClassType);
-    RttiProperty := RttiType.GetProperty('DataField');
-    if Assigned(RttiProperty) and RttiProperty.IsReadable then
-    begin
-      try
-        DataField := Trim(RttiProperty.GetValue(Component).AsString);
-        if (DataField <> '') and (Pos('BUTTON', Cn) = 0) then
-          Exit(True);
-      except
-      end;
-    end;
-
-    RttiProperty := RttiType.GetProperty('DataBinding');
-    if Assigned(RttiProperty) and RttiProperty.IsReadable then
-    begin
-      try
-        Binding := RttiProperty.GetValue(Component);
-        if (not Binding.IsEmpty) and Binding.IsObject then
-        begin
-          BindingObj := Binding.AsObject;
-          if Assigned(BindingObj) then
-          begin
-            BindCtx := TRttiContext.Create;
-            try
-              FieldNameProp := BindCtx.GetType(BindingObj.ClassType).GetProperty('FieldName');
-              if Assigned(FieldNameProp) and FieldNameProp.IsReadable then
-              begin
-                FieldName := Trim(FieldNameProp.GetValue(BindingObj).AsString);
-                if (FieldName <> '') and (Pos('BUTTON', Cn) = 0) and (Pos('EDIT', Cn) = 0) then
-                  Exit(True);
-              end;
-            finally
-              BindCtx.Free;
-            end;
-          end;
-        end;
-      except
-      end;
-    end;
-  finally
-    RttiContext.Free;
   end;
 end;
 
@@ -495,13 +389,11 @@ begin
     Exit;
   if Component is TCustomEdit then
     Exit(False);
-  if IsDataBoundValueControl(Component) then
-    Exit(False);
 
   Cn := UpperCase(Component.ClassName);
   if (Pos('EDIT', Cn) > 0) or (Pos('MEMO', Cn) > 0) or (Pos('COMBO', Cn) > 0) or
      (Pos('SPIN', Cn) > 0) or (Pos('MASK', Cn) > 0) or (Pos('LOOKUP', Cn) > 0) or
-     (Pos('DATE', Cn) > 0) or (Pos('TIME', Cn) > 0) or (Pos('DB', Cn) > 0) then
+     (Pos('DATE', Cn) > 0) or (Pos('TIME', Cn) > 0) then
     Exit(False);
 
   Result := True;
@@ -509,26 +401,15 @@ end;
 
 procedure TLanguageManager.EnsureUnicodeFont(Component: TComponent);
 var
-  FontObj: TFont;
-begin
-  // GB2312/ANSI_CHARSET 无法正确绘制越南语带调字母，会显示成 ? / 生僻汉字
-  FontObj := GetComponentFont(Component);
-  if Assigned(FontObj) then
-  begin
-    FontObj.Charset := DEFAULT_CHARSET;
-    FontObj.Name := 'Microsoft YaHei';
-  end;
-end;
-
-function TLanguageManager.GetComponentFont(Component: TComponent): TFont;
-var
   RttiContext: TRttiContext;
   RttiType: TRttiType;
   RttiProperty: TRttiProperty;
+  FontObj: TFont;
 begin
-  Result := nil;
-  if Component = nil then
+  if not (Component is TControl) then
     Exit;
+
+  // GB2312/ANSI_CHARSET 无法正确绘制越南语带调字母，会显示成 ? / 生僻汉字
   RttiContext := TRttiContext.Create;
   try
     RttiType := RttiContext.GetType(Component.ClassType);
@@ -536,250 +417,17 @@ begin
     if Assigned(RttiProperty) and RttiProperty.IsReadable then
     begin
       try
-        Result := RttiProperty.GetValue(Component).AsType<TFont>;
-      except
-        Result := nil;
-      end;
-    end;
-  finally
-    RttiContext.Free;
-  end;
-end;
-
-function TLanguageManager.GetComponentCaptionText(Component: TComponent): string;
-var
-  RttiContext: TRttiContext;
-  RttiType: TRttiType;
-  RttiProperty: TRttiProperty;
-begin
-  Result := '';
-  if Component = nil then
-    Exit;
-  RttiContext := TRttiContext.Create;
-  try
-    RttiType := RttiContext.GetType(Component.ClassType);
-    RttiProperty := RttiType.GetProperty('Caption');
-    if not (Assigned(RttiProperty) and RttiProperty.IsReadable) then
-      RttiProperty := RttiType.GetProperty('Text');
-    if Assigned(RttiProperty) and RttiProperty.IsReadable then
-    begin
-      try
-        Result := RttiProperty.GetValue(Component).AsString;
-      except
-        Result := '';
-      end;
-    end;
-  finally
-    RttiContext.Free;
-  end;
-end;
-
-function TLanguageManager.GetAvailableTextWidth(Component: TComponent): Integer;
-var
-  RttiContext: TRttiContext;
-  RttiType: TRttiType;
-  RttiProperty: TRttiProperty;
-  Ctrl: TControl;
-begin
-  Result := 0;
-  if Component is TControl then
-  begin
-    Ctrl := TControl(Component);
-    Result := Ctrl.ClientWidth;
-    if Result <= 0 then
-      Result := Ctrl.Width;
-  end
-  else
-  begin
-    // Grid 列等非 TControl：尝试读 Width
-    RttiContext := TRttiContext.Create;
-    try
-      RttiType := RttiContext.GetType(Component.ClassType);
-      RttiProperty := RttiType.GetProperty('Width');
-      if Assigned(RttiProperty) and RttiProperty.IsReadable then
-      begin
-        try
-          Result := RttiProperty.GetValue(Component).AsInteger;
-        except
-          Result := 0;
+        FontObj := RttiProperty.GetValue(Component).AsType<TFont>;
+        if Assigned(FontObj) then
+        begin
+          FontObj.Charset := DEFAULT_CHARSET;
+          FontObj.Name := 'Microsoft YaHei';
         end;
-      end;
-    finally
-      RttiContext.Free;
-    end;
-  end;
-  if Result > 4 then
-    Dec(Result, 4);
-end;
-
-procedure TLanguageManager.CacheBaseFontSize(Component: TComponent; FontObj: TFont);
-var
-  Key: Pointer;
-begin
-  if (Component = nil) or (FontObj = nil) then
-    Exit;
-  Key := Pointer(Component);
-  if not FBaseFontSize.ContainsKey(Key) then
-    FBaseFontSize.Add(Key, FontObj.Size);
-end;
-
-procedure TLanguageManager.RestoreBaseFontSize(Component: TComponent; FontObj: TFont);
-var
-  BaseSize: Integer;
-begin
-  if (Component = nil) or (FontObj = nil) then
-    Exit;
-  if FBaseFontSize.TryGetValue(Pointer(Component), BaseSize) then
-    FontObj.Size := BaseSize;
-end;
-
-procedure TLanguageManager.CacheBaseWidth(Component: TComponent);
-var
-  Key: Pointer;
-  Ctrl: TControl;
-begin
-  if not (Component is TControl) then
-    Exit;
-  Ctrl := TControl(Component);
-  Key := Pointer(Component);
-  if not FBaseWidth.ContainsKey(Key) then
-    FBaseWidth.Add(Key, Ctrl.Width);
-end;
-
-procedure TLanguageManager.RestoreBaseWidth(Component: TComponent);
-var
-  BaseW: Integer;
-begin
-  if not (Component is TControl) then
-    Exit;
-  if FBaseWidth.TryGetValue(Pointer(Component), BaseW) then
-    TControl(Component).Width := BaseW;
-end;
-
-procedure TLanguageManager.TryEnableWordWrap(Component: TComponent);
-var
-  RttiContext: TRttiContext;
-  RttiType: TRttiType;
-  RttiProperty: TRttiProperty;
-  Cn: string;
-begin
-  if Component = nil then
-    Exit;
-  Cn := UpperCase(Component.ClassName);
-  // 仅标签类尝试换行；按钮换行会出现“lê / n sợi”断词，故排除
-  if (Pos('BUTTON', Cn) > 0) or (Pos('BTN', Cn) > 0) then
-    Exit;
-  if (Pos('LABEL', Cn) = 0) and (Pos('STATIC', Cn) = 0) then
-    Exit;
-
-  RttiContext := TRttiContext.Create;
-  try
-    RttiType := RttiContext.GetType(Component.ClassType);
-    RttiProperty := RttiType.GetProperty('WordWrap');
-    if Assigned(RttiProperty) and RttiProperty.IsWritable then
-    begin
-      try
-        RttiProperty.SetValue(Component, TValue.From<Boolean>(True));
       except
       end;
     end;
   finally
     RttiContext.Free;
-  end;
-end;
-
-procedure TLanguageManager.TryExpandControlWidth(Component: TComponent; NeedW: Integer);
-var
-  Ctrl: TControl;
-  ParentCtrl: TWinControl;
-  MaxW, NewW: Integer;
-  Cn: string;
-begin
-  if not (Component is TControl) then
-    Exit;
-  Ctrl := TControl(Component);
-  Cn := UpperCase(Component.ClassName);
-  // 放宽标签与按钮宽度（按钮宁可加宽，也不换行断词）
-  if (Pos('LABEL', Cn) = 0) and (Pos('STATIC', Cn) = 0) and
-     (Pos('CAPTION', Cn) = 0) and (Pos('BUTTON', Cn) = 0) and
-     (Pos('BTN', Cn) = 0) then
-    Exit;
-
-  CacheBaseWidth(Component);
-
-  NewW := NeedW + 6;
-  if NewW <= Ctrl.Width then
-    Exit;
-
-  MaxW := NewW;
-  if Ctrl.Parent is TWinControl then
-  begin
-    ParentCtrl := TWinControl(Ctrl.Parent);
-    MaxW := ParentCtrl.ClientWidth - Ctrl.Left - 2;
-    if MaxW < Ctrl.Width then
-      MaxW := Ctrl.Width;
-  end;
-  if NewW > MaxW then
-    NewW := MaxW;
-  if NewW > Ctrl.Width then
-    Ctrl.Width := NewW;
-end;
-
-procedure TLanguageManager.FitControlText(Component: TComponent);
-var
-  FontObj: TFont;
-  Text: string;
-  AvailW, TextW: Integer;
-  Bmp: TBitmap;
-  Cn: string;
-begin
-  if Component = nil then
-    Exit;
-  if IsDataBoundValueControl(Component) then
-    Exit;
-
-  Text := Trim(GetComponentCaptionText(Component));
-  if Text = '' then
-    Exit;
-
-  FontObj := GetComponentFont(Component);
-  // 切回中文/短文案时先恢复设计宽度与字号
-  if Assigned(FontObj) then
-  begin
-    CacheBaseFontSize(Component, FontObj);
-    RestoreBaseFontSize(Component, FontObj);
-  end;
-  CacheBaseWidth(Component);
-  RestoreBaseWidth(Component);
-
-  AvailW := GetAvailableTextWidth(Component);
-
-  if FontObj = nil then
-  begin
-    Cn := UpperCase(Component.ClassName);
-    if Pos('COLUMN', Cn) > 0 then
-      TryEnableWordWrap(Component);
-    Exit;
-  end;
-
-  Bmp := TBitmap.Create;
-  try
-    Bmp.SetSize(1, 1);
-    Bmp.Canvas.Font.Assign(FontObj);
-    TextW := Bmp.Canvas.TextWidth(Text);
-    if AvailW < 8 then
-      AvailW := TextW;
-
-    if TextW > AvailW then
-    begin
-      TryExpandControlWidth(Component, TextW);
-      AvailW := GetAvailableTextWidth(Component);
-    end;
-
-    if TextW > AvailW then
-      TryEnableWordWrap(Component);
-  finally
-    Bmp.Free;
   end;
 end;
 
@@ -818,17 +466,6 @@ begin
         if ALanguage <> ltiChinese then
           EnsureUnicodeFont(Component);
         RttiProperty.SetValue(Component, TValue.From(NewValue));
-        if SameText(PropName, 'Caption') or SameText(PropName, 'Text') or
-           SameText(PropName, 'CaptionOn') or SameText(PropName, 'CaptionOff') then
-          FitControlText(Component);
-      end
-      else if (NewValue <> '') and SameText(PropName, 'Caption') then
-      begin
-        // 文案未变也按当前语言重适配字号（例如切回中文需恢复基准字号）
-        if ALanguage = ltiChinese then
-          RestoreBaseFontSize(Component, GetComponentFont(Component))
-        else
-          FitControlText(Component);
       end;
     except
     end;
@@ -851,13 +488,9 @@ begin
     Exit;
   FVisited.Add(Component, True);
 
-  // 数据绑定值控件：绝不能改 Caption/Text，否则未 Edit 时会抛 EDatabaseError
-  if not IsDataBoundValueControl(Component) then
-  begin
-    TranslateProperty(Component, 'Caption', ALanguage);
-    if ShouldTranslateTextProperty(Component) then
-      TranslateProperty(Component, 'Text', ALanguage);
-  end;
+  TranslateProperty(Component, 'Caption', ALanguage);
+  if ShouldTranslateTextProperty(Component) then
+    TranslateProperty(Component, 'Text', ALanguage);
   TranslateProperty(Component, 'Hint', ALanguage);
   // 开关控件文案
   TranslateProperty(Component, 'CaptionOn', ALanguage);
@@ -890,81 +523,17 @@ begin
     Result := GetLanguageField(Item, ALanguage);
 end;
 
-procedure TLanguageManager.CollectSideEffectTargets(ARoot: TComponent;
-  ADatasets: TList<TDataSet>; ATimers: TList<TTimer>);
-var
-  i: Integer;
-  Child: TComponent;
-begin
-  if (ARoot = nil) or (ADatasets = nil) or (ATimers = nil) then
-    Exit;
-  if ARoot is TDataSet then
-  begin
-    if ADatasets.IndexOf(TDataSet(ARoot)) < 0 then
-      ADatasets.Add(TDataSet(ARoot));
-  end;
-  if ARoot is TTimer then
-  begin
-    if ATimers.IndexOf(TTimer(ARoot)) < 0 then
-      ATimers.Add(TTimer(ARoot));
-  end;
-  for i := 0 to ARoot.ComponentCount - 1 do
-  begin
-    Child := ARoot.Components[i];
-    CollectSideEffectTargets(Child, ADatasets, ATimers);
-  end;
-end;
-
 procedure TLanguageManager.TranslateForm(AControl: TWinControl; const ALanguage: TiLanguageType);
-var
-  Datasets: TList<TDataSet>;
-  Timers: TList<TTimer>;
-  TimerStates: TList<Boolean>;
-  i: Integer;
-  Ds: TDataSet;
 begin
   if AControl = nil then
     Exit;
 
   FCurrentLanguage := ALanguage;
-  // 不再改系统 Charset：会导致中文/登录页乱码；控件级字体由 FitControlText 处理
+  // 不再改系统 Charset：会导致中文/登录页乱码；仅对需显示越文的控件设置 YaHei 字体
   FVisited.Clear;
-
-  Datasets := TList<TDataSet>.Create;
-  Timers := TList<TTimer>.Create;
-  TimerStates := TList<Boolean>.Create;
   try
-    CollectSideEffectTargets(AControl, Datasets, Timers);
-    // 翻译期间关掉 Timer，避免 tmr 改 rfOutPut 与翻译交错
-    for i := 0 to Timers.Count - 1 do
-    begin
-      TimerStates.Add(Timers[i].Enabled);
-      Timers[i].Enabled := False;
-    end;
-    // 禁用数据集控件刷新，降低写字段风险
-    for i := 0 to Datasets.Count - 1 do
-    begin
-      Ds := Datasets[i];
-      if Assigned(Ds) and Ds.Active then
-        Ds.DisableControls;
-    end;
-
-    try
-      TranslateComponent(AControl, ALanguage);
-    finally
-      for i := 0 to Datasets.Count - 1 do
-      begin
-        Ds := Datasets[i];
-        if Assigned(Ds) and Ds.Active and Ds.ControlsDisabled then
-          Ds.EnableControls;
-      end;
-      for i := 0 to Timers.Count - 1 do
-        Timers[i].Enabled := TimerStates[i];
-    end;
+    TranslateComponent(AControl, ALanguage);
   finally
-    TimerStates.Free;
-    Timers.Free;
-    Datasets.Free;
     FVisited.Clear;
   end;
 end;
